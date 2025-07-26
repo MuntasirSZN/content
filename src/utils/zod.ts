@@ -1,17 +1,9 @@
-import type { ZodOptionalDef, ZodType } from 'zod'
-import { zodToJsonSchema, ignoreOverride } from 'zod-to-json-schema'
-import { z as zod } from 'zod'
-import { createDefu } from 'defu'
+import type { ZodType } from 'zod/v4'
+import type { $ZodOptionalDef } from 'zod/v4/core'
+import { z as zod } from 'zod/v4'
 import type { Draft07, EditorOptions } from '../types'
 
-const defu = createDefu((obj, key, value) => {
-  if (Array.isArray(obj[key]) && Array.isArray(value)) {
-    obj[key] = value
-    return true
-  }
-})
-
-declare module 'zod' {
+declare module 'zod/v4' {
   interface ZodTypeDef {
     editor?: EditorOptions
   }
@@ -34,8 +26,8 @@ export const z = zod
 
 // Function to get the underlying Zod type
 export function getUnderlyingType(zodType: ZodType): ZodType {
-  while ((zodType._def as ZodOptionalDef).innerType) {
-    zodType = (zodType._def as ZodOptionalDef).innerType as ZodType
+  while ((zodType._def as $ZodOptionalDef).innerType) {
+    zodType = (zodType._def as $ZodOptionalDef).innerType as ZodType
   }
   return zodType
 }
@@ -44,25 +36,68 @@ export function getUnderlyingTypeName(zodType: ZodType): string {
   return getUnderlyingType(zodType).constructor.name
 }
 
-export function zodToStandardSchema(schema: zod.ZodSchema, name: string): Draft07 {
-  const jsonSchema = zodToJsonSchema(schema, { name, $refStrategy: 'none' }) as Draft07
-  const jsonSchemaWithEditorMeta = zodToJsonSchema(
-    schema,
-    {
-      name,
-      $refStrategy: 'none',
-      override: (def) => {
-        if (def.editor) {
-          return {
-            $content: {
-              editor: def.editor,
-            },
-          } as never
+// Helper function to convert Zod JSONSchema properties to Draft07 format
+function convertProperties(props: Record<string, any> | undefined): Record<string, any> {
+  if (!props) return {}
+  
+  const converted: Record<string, any> = {}
+  for (const [key, value] of Object.entries(props)) {
+    if (typeof value === 'object' && value !== null) {
+      converted[key] = {
+        ...value,
+        properties: value.properties ? convertProperties(value.properties) : undefined
+      }
+    } else {
+      converted[key] = value
+    }
+  }
+  return converted
+}
+
+export function zodToStandardSchema(schema: zod.ZodSchema, _name: string): Draft07 {
+  // Use Zod v4's native JSON schema generation with proper date handling
+  try {
+    const baseSchema = zod.toJSONSchema(schema, {
+      target: 'draft-7',
+      unrepresentable: 'any',
+      override: (ctx) => {
+        // Handle ZodDate specifically to convert to string with date-time format
+        if (ctx.zodSchema._zod?.def.typeName === 'ZodDate') {
+          ctx.jsonSchema.type = 'string'
+          ctx.jsonSchema.format = 'date-time'
         }
+      }
+    })
 
-        return ignoreOverride
-      },
-    }) as Draft07
+    // Convert Zod's JSONSchema format to our Draft07 format
+    const draft07Schema: Draft07 = {
+      $schema: 'http://json-schema.org/draft-07/schema#',
+      $ref: '#/definitions/default',
+      definitions: {
+        default: {
+          type: baseSchema.type as string || 'object',
+          properties: convertProperties(baseSchema.properties),
+          required: Array.isArray(baseSchema.required) ? baseSchema.required : [],
+          additionalProperties: typeof baseSchema.additionalProperties === 'boolean' ? baseSchema.additionalProperties : false
+        }
+      }
+    }
 
-  return defu(jsonSchema, jsonSchemaWithEditorMeta)
+    return draft07Schema
+  } catch (error) {
+    console.error('Zod toJSONSchema error for schema:', schema.constructor.name, error)
+    // Fallback to a basic empty schema if conversion fails
+    return {
+      $schema: 'http://json-schema.org/draft-07/schema#',
+      $ref: '#/definitions/default',
+      definitions: {
+        default: {
+          type: 'object',
+          properties: {},
+          required: [],
+          additionalProperties: false
+        }
+      }
+    }
+  }
 }

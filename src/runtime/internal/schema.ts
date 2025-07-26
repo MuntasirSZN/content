@@ -10,7 +10,16 @@ const propertyTypes = {
 }
 
 export function getOrderedSchemaKeys(schema: Draft07) {
-  const shape = Object.values(schema.definitions)[0].properties
+  if (!schema.definitions || Object.keys(schema.definitions).length === 0) {
+    throw new Error('Schema definitions are missing or empty')
+  }
+  
+  const firstDefinition = Object.values(schema.definitions)[0]
+  if (!firstDefinition || !firstDefinition.properties) {
+    throw new Error('Schema definition is missing properties')
+  }
+  
+  const shape = firstDefinition.properties
   const keys = new Set([
     shape.id ? 'id' : undefined,
     shape.title ? 'title' : undefined,

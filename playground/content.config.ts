@@ -46,14 +46,14 @@ const data = defineCollection({
     company: z.string(),
     domain: z.array(z.string()),
     tutorial: z.array(
-      z.record(
-        z.object({
-          name: z.string(),
-          type: z.string(),
-          born: z.number(),
-        }),
-      ),
-    ),
+       z.record(
+         z.string(),
+         z.object({
+           name: z.string(),
+           type: z.string(),
+           born: z.number(),
+         }),
+       ),    ),
     author: z.string(),
     published: z.boolean(),
   }),
