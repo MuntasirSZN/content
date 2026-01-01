@@ -146,7 +146,7 @@
     "@types/ws": "^8.18.1",
     "csvtojson": "^2.0.10",
     "eslint": "^9.32.0",
-    "happy-dom": "^18.0.1",
+    "happy-dom": "^20.0.2",
     "mdclint": "^0.0.3",
     "micromark-util-types": "^2.0.2",
     "nuxt": "^4.0.3",
